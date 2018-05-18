@@ -1,0 +1,92 @@
+Comparing results of SRILM with twitter.py on brown
+
+For twitter.py using
+
+    for word in corpus.words():
+        if word.isalpha():
+            corpus_tokens.append(word.lower())
+            #corpus_tokens.append(' ' + word.lower() + ' ') #sgmod
+    bigram_model = LgramModel(2,corpus_tokens,True,True)
+
+(q7 from class/fnlp/2017/assignment1_solutions.py)
+
+For SRILM using
+
+            for word in brown.words():
+                if word.isalpha():
+                    print ' '.join(word.lower())
+  > /disk/scratch/tmp/brown_unigrams.txt
+
+and then
+
+ > bin/i686-m64/ngram-count -order 2 -unk -text /disk/scratch/tmp/brown_unigrams.txt -lm /disk/scratch/tmp/brown_2g_wb_u.ngf -wbdiscount1 -wbdiscount2
+
+Results are _almost_ all as good as can be expected given that ngf
+only has 7 sig digits.  All unigram probs and some available bigram
+probs are correct to 6 places.
+
+All bow[SRILM] = _backoff_alphas[Lgram] to 5 places except
+ a) the 7 cases (o, u, i, a, r, n, e) where we have a full set (27) of
+    contexts.  These don't matter much, as
+    i) backoff will be very rare;
+    ii) they are still equal to 2 places
+ b) 't', which is only correct to 3 places -- not at all clear why!
+
+
+And using the model looks good:
+
+  >: echo 't h e' |~/lcontrib_sl6/src/srilm/bin/i686-m64/ngram -lm /disk/scratch/tmp/brown_2g_wb_u.ngf -unk -debug 2 -ppl -
+    reading 29 1-grams
+    reading 637 2-grams
+    t h e
+	    p( t | <s> ) 	= [2gram] 0.162078 [ -0.790275 ]
+	    p( h | t ...) 	= [2gram] 0.311647 [ -0.506338 ]
+	    p( e | h ...) 	= [2gram] 0.483572 [ -0.315539 ]
+	    p( </s> | e ...) 	= [2gram] 0.348078 [ -0.458323 ]
+    1 sentences, 3 words, 0 OOVs
+    0 zeroprobs, logprob= -2.07048 ppl= 3.29321 ppl1= 4.89957
+
+ : log(2**bgm.entropy('the',True,True,verbose=True),10)
+    p(t|('',)) = [2-gram] 2.625238
+    p(h|('t',)) = [2-gram] 1.682017
+    p(e|('h',)) = [2-gram] 1.048198
+    p(|('e',)) = [2-gram] 1.522518
+    2.0704752802169164
+ : [log(2**l,10) for l in [2.625238,1.682017,1.048198,1.522518]]
+    [0.7902753837569185,
+     0.5063375702167426,
+     0.3155390393949937,
+     0.45832358693833336]
+
+and with at least one backoff:
+  >: echo 'e v b r y' |~/lcontrib_sl6/src/srilm/bin/i686-m64/ngram -lm /disk/scratch/tmp/brown_2g_wb_u.ngf -unk -debug 2 -ppl -
+    reading 29 1-grams
+    reading 637 2-grams
+    e v b r y
+	    p( e | <s> ) 	= [2gram] 0.0244891 [ -1.61103 ]
+	    p( v | e ...) 	= [2gram] 0.016512 [ -1.7822 ]
+	    p( b | v ...) 	= [1gram] 3.40695e-05 [ -4.46763 ]
+	    p( r | b ...) 	= [2gram] 0.0572449 [ -1.24226 ]
+	    p( y | r ...) 	= [2gram] 0.0299516 [ -1.52358 ]
+	    p( </s> | y ...) 	= [2gram] 0.744537 [ -0.128114 ]
+    1 sentences, 5 words, 0 OOVs
+    0 zeroprobs, logprob= -10.7548 ppl= 62.0112 ppl1= 141.568
+
+  : log(2**bgm.entropy('evbry',True,True,verbose=True),10)
+    p(e|('',)) = [2-gram] 5.351715
+    p(v|('e',)) = [2-gram] 5.920343
+    backing off for ('v', 'b')
+     alpha: ('v',) = 0.00268425281311
+    p(b|('v',)) = [2-gram] 14.841226
+    p(r|('b',)) = [2-gram] 4.126709
+    p(y|('r',)) = [2-gram] 5.061224
+    p(|('y',)) = [2-gram] 0.425585
+    10.754838930601725
+
+  : [log(2**l,10) for l in [5.351715,5.920343,14.841226,4.126709,5.061224,0.425585]]
+    [1.611026743244863,
+     1.7822008276192813,
+     4.467654198428165,
+     1.242263192376512,
+     1.5235802387744375,
+     0.12811385070465542]

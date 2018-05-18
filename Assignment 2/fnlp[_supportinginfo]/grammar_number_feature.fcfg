@@ -1,0 +1,16 @@
+% start S
+# Grammatical productions.
+S -> NP[NUM=?n] VP[NUM=?n]
+NP[NUM=?n] -> Det[NUM=?n] N[NUM=?n] | Pro[NUM=?n] 
+VP[NUM=?n] -> Vi[NUM=?n] | Vt[NUM=?n] NP
+# Lexical productions.
+Pro[NUM=sg] -> "i" | "you" | "he" | "she"
+Pro[NUM=pl] -> "we" | "you" 
+Det[NUM=sg] -> "a" | "an" | "the"
+Det[NUM=pl] -> "the"
+N[NUM=sg] ->  "dog" | "banana"
+N[NUM=pl] ->  "dogs" | "bananas"
+Vi[NUM=sg] -> "sleep" | "eat" | "sleeps" | "eats"
+Vi[NUM=pl] -> "sleep" | "eat"
+Vt[NUM=sg] -> "eat" | "eats"
+Vt[NUM=pl] -> "eat" 

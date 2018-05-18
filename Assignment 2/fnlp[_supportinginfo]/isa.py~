@@ -1,0 +1,137 @@
+#!/c/Python26/python
+# Based on Zhang, Vogel and Waibel 20??, "Integrated Phrase Segmentation and Alignment Algorithm
+#   for Statistical Machine Translation"
+import sys
+
+class ISA:
+  def __init__(self,als,ep,fp,bp,thresh=0.0):
+    self.als=als
+    self.ep=ep
+    self.fp=fp
+    self.bp=bp
+    self.thresh=thresh
+    self.e=[w.lower() for w in als.words if w[0].isalpha()]
+    self.Ne=len(self.e)
+    self.f=[w.lower() for w in als.mots if w[0].isalpha()]
+    self.Nf=len(self.f)
+    self.m=[0]*self.Ne
+    self.max=-1000.0
+    self.blocks=[]
+    self.status={}
+    # so m is an array of columns, and m[x][y] should be
+    # pmi(e[x],f[y])
+    for x in range(self.Ne):
+      self.m[x]=[0]*self.Nf
+      for y in range(self.Nf):
+        pmi=self.pmi(self.e[x],self.f[y])
+	self.m[x][y]=pmi
+        if pmi>self.max:
+          self.max=pmi
+          self.maxX=x
+          self.maxY=y
+
+  def show(self,frm=0,to=-1):
+    if to==-1:
+      to=len(self.e)
+    fwl=max(len(self.f[i]) for i in range(frm,to))
+    fwFormat="%%%ss"%fwl
+    pmiFormat=[("%%%s.2f"%max(5,len(self.e[i]))) for i in range(frm,to)]
+    ewFormat=[("%%%ss"%max(5,len(self.e[i]))) for i in range(frm,to)]
+    for y in range(self.Nf-1,-1,-1):
+      if y in range(frm,to):
+        print ' '.join([fwFormat%self.f[y],"%2s"%y]+
+                        [pmiFormat[x-frm]%self.m[x][y] for x in range(frm,to)])
+    print ' '.join([" "*(fwl+3)]+[ewFormat[x-frm]%x for x in range(frm,to)])
+    print ' '.join([" "*(fwl+3)]+[ewFormat[x-frm]%self.e[x] for x in range(frm,to)])
+    print "(%s,%s)"%(self.maxX,self.maxY)
+
+  def pmi(self,e,f):
+    return self.bp.logprob((e,f))-(self.ep.logprob(e)+self.fp.logprob(f))
+   
+  def nextBlock(self):
+    if self.blocks!=[]:
+      # Need a new max
+      self.max=-1000
+      for x in range(self.Ne):
+        for y in range(self.Nf):
+          p=(x,y)
+          if not (x,y) in self.status:
+            pmi=self.m[x][y]
+            if pmi>self.max:
+              self.max=pmi
+              self.maxX=x
+              self.maxY=y
+    p=(self.maxX,self.maxY)
+    blocks=self.growBlock(p,p,self.max)
+    return blocks
+
+  def growBlock(self,ll,ur,seedPMI):
+    global newCandidates
+    # Grow a block all possible directions
+    # Brute force for now -- just enumerate all possible rectangles, keeping
+    #  keeping track of everything we find
+    candidates=[(ll,ur)]
+    res=[]
+    while candidates:
+      res=res+candidates # should do area-sorted insertion. . .
+      newCandidates=[]
+      for (ll,ur) in candidates:
+        for (dx,dy) in ((1,0),(0,-1),(-1,0),(0,1)):
+          bigger=self.growBlock1(ll,ur,seedPMI,dx,dy)
+          if bigger is not None:
+            newCandidates.append(bigger)
+      candidates=newCandidates
+    return sorted(res,key=lambda (ll,ur):((ur[0]-ll[0])+1)*((ur[1]-ll[1])+1),reverse=True)
+
+  def growBlock1(self,ll,ur,seedPMI,dx,dy):
+    # grow a block with lower-left at ll and upper-right at ur of width w and height h
+    # by dx,dy clockwise (from (1,0),(0,-1),(-1,0),(0,1),
+    #                     bearing in mind that m[x] is a column going _up_)
+    # respecting the requirements that:
+    #  0) the cell is still in the matrix
+    #  1) ratio of each added cell's PMI to seedPMI >= self.thresh
+    #  2) no free cell in added cell's row or column has > PMI
+    #         > than _what_ PMI?  non-seed max in added cell's row/column
+    #          _within_ the new block, I guess
+    # First requirement 0:
+    print "growing %s, %s by %s, %s"%(ll,ur,dx,dy)
+    if dx is not 0:
+      if dx is -1:
+        if ll[0] is 0:
+          return
+        else:
+          # extending left
+          ll=(ll[0]-1,ll[1])
+          x=ll[0]
+      elif ur[0] is (self.Ne-1):
+        return
+      else:
+        ur=(ur[0]+1,ur[1])
+        x=ur[0]
+      for y in range(ll[1],ur[1]+1):
+        # req. 1
+        if self.m[x][y]/seedPMI<self.thresh:
+          return
+    elif dy is -1:
+      if ll[1] is 0:
+        return
+      else:
+        ll=(ll[0],ll[1]-1)
+        y=ll[1]
+    elif ur[1] is (self.Nf-1):
+      return
+    else:
+      ur=(ur[0],ur[1]+1)
+      y=ur[1]
+    for x in range(ll[0],ur[0]+1):
+      # req. 1
+      if self.m[x][y]/seedPMI<self.thresh:
+        return
+    #print "got one: %s, %s"%(ll,ur)
+    res=(ll,ur)
+    # how could we check this sooner w/o obscurity?
+    if res in newCandidates:
+      #print " duplicate|"
+      return
+    #sys.stdin.readline()
+    return res

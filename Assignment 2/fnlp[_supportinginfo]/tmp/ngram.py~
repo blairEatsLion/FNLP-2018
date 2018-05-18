@@ -1,0 +1,96 @@
+def from_arpa(self,file):
+  """
+    Load model parameters from text-based for a file in the ARPA format
+    Language Model, recognising the sentence-begin (<s>) and sentence-end
+    (</s>) tokens if present.
+
+    We build one PrecompProbDist for each context, and package them into
+    appropriately cascaded backoffs for the top-level NgramModel
+
+    The model is expected to be in the following standardized format:
+
+      \data\
+      ngram 1=M
+      ngram 2=M
+      ...
+      ngram N=M
+
+     \1-grams:
+     p(w)    w   bow(w)
+     ...
+     \2-grams:
+     p(v,w)  v w   bow(v,w)
+     ...
+     \3-grams:
+     p(u,v,w)  u v w
+
+     \end\
+
+    where M refers to the number of unique NGrams for this order,
+    and N refers to the maximum NGram order of the model.  
+    Similarly, p(w) refers to the probability of NGram 'w', and
+    bow(w) refers to the back-off weight for NGram 'w'.  The highest
+    order of the model does not have back-off weights.  Back-off
+    weights equal to 0.0 in log-base 10 may be omitted to save space,
+    and NGrams ending in sentence-end (</s>) naturally do not have 
+    back-off weights.
+
+    The NGram columns are separated by a single tab (\t).
+
+  """
+
+  for line in open(file,"r"):
+    line = line.strip()
+
+    if self._n>0 and not line.startswith("\\") and not line=="":
+      ngram = re.split(r"\s+", line)
+      prob  = float(ngram.pop(0))
+      bow = 0.0
+      if len(ngram)>self.order: bow = float(ngram.pop(-1))
+
+      #We have a unigram model - just requires a single state
+      if self.max_order==1:
+        if ngram==self.sb or ngram==self.se:
+          #Skip sentence-begin, sentence-end in the 1-gram case
+          continue
+        self._make_arc( self.sb, self.sb, ngram[0], prob )
+        self._make_final( self.sb, 1.0 )
+
+      elif self.order==1:
+        if ngram[0]==self.sb:
+          #Just a back-off weight
+          self._make_arc( self.sb, self.eps, self.eps, bow )
+        elif ngram[0]==self.se:
+          #Just a probability
+          self._make_final( self.eps, prob )
+        else:
+          self._make_arc( self.eps, ngram[0], ngram[0], prob )
+          self._make_arc( ngram[0], self.eps, self.eps, bow )
+
+      elif self.order<self.max_order:
+        isym  = ngram[-1]
+        s_st = ",".join(ngram[:-1])
+        if isym==self.se:
+          self._make_final( s_st, prob )
+        else:
+          e_st = ",".join(ngram)
+          b_st = ",".join(ngram[1:])
+          self._make_arc( s_st, e_st, isym, prob )
+          self._make_arc( e_st, b_st, self.eps, bow )
+      elif self.order==self.max_order:
+        isym = ngram[-1]
+        s_st = ",".join(ngram[:-1])
+        if isym==self.se:
+          self._make_final( s_st, prob )
+        else:
+          e_st = ",".join(ngram[1:])
+          self._make_arc( s_st, e_st, isym, prob )
+
+
+    elif line.startswith("ngram"):
+      self.max_order = int(re.sub(r"^ngram\s+(\d+)=.*$", r"\1", line))
+
+    elif re.match(r"^\\\d+",line):
+      self.order = int(re.sub(r"^\\(\d+).*$", r"\1", line))
+
+  return

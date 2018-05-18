@@ -1,0 +1,75 @@
+from nltk.app import rdparser_app as rd
+from nltk import parse_cfg
+from pprint import pprint as pp
+
+g1=parse_cfg("""
+    # Grammatical productions.
+     S -> NP VP
+     NP -> D N | Pro | PropN
+     D -> PosPro | Art | NP s
+     VP -> Vi | Vt NP | Vp NP VP
+    # Lexical productions.
+     Pro -> "i" | "we" | "you" | "he" | "she" | "him" | "her"
+     PosPro -> "my" | "our" | "your" | "his" | "her"
+     PropN -> "Robin" | "Jo"
+     Art -> "a" | "an" | "the"
+     N -> "cat" | "dog" | "duck" | "park" | "telescope" | "bench"
+     Vi -> "sleep" | "run" | "duck"
+     Vt -> "eat" | "break" | "see" | "saw"
+     Vp -> "see" | "saw" | "heard"
+     s -> "'s"
+    """)
+
+g2=parse_cfg("""
+    # Grammatical productions.
+     S -> NP VP
+     NP -> D N | N | Pro | PropN
+     D -> PosPro | Art
+     VP -> Vi | Vt NP | Vp NP VP
+    # Lexical productions.
+     Pro -> "i" | "we" | "you" | "he" | "she" | "him" | "her"
+     PosPro -> "my" | "our" | "your" | "his" | "her"
+     PropN -> "Robin" | "Jo"
+     Art -> "a" | "an" | "the"
+     N -> "cat" | "dog" | "duck" | "park" | "telescope" | "bench"
+     N -> "dogs" | "cats" | "ducks"
+     Vi -> "sleep" | "run" | "duck"
+     Vt -> "eat" | "break" | "see" | "saw"
+     Vp -> "see" | "saw" | "heard"
+     s -> "'s"
+    """)
+
+g3=parse_cfg("""
+    # Grammatical productions
+     S -> NPsg VPsg | NPpl VPpl
+     NPpl -> Npl | Dpl Npl | ProPl | PropNPpl
+     NPsg -> Dsg Nsg | ProSg | PropNPsg
+     Dpl -> PosPro | Art
+     Dsg -> PosPro | ArtSg | Art
+     VPsg -> Visg | Vtsg NP | Vpsg NP VP
+     VPpl -> Vipl | Vtpl NP | Vppl NP VP
+     NP -> NPsg | NPpl
+    # Lexical productions.
+     ProSg -> "he" | "she" | "it" | "him" | "her" | "i" | "you"
+     ProPl -> "they" | "them" | "we" | "you"
+     PosPro -> "my" | "our" | "your" | "his" | "her" | "their"
+     PropNsg -> "Robin" | "Jo" | "IBM"
+     PropNpl -> "IBM"
+     ArtSg -> "a" | "an"
+     Art -> "the"
+     Nsg -> "cat" | "sheep" | "dog" | "duck" | "park" | "telescope" | "bench"
+     Npl -> "cats" | "dogs" | "men" | "sheep"
+     Visg -> "sleeps" | "runs" | "ducks"
+     Vipl -> "sleep" | "run" | "duck"
+     Vtsg -> "eats" | "breaks" | "sees" | "saw"
+     Vtpl -> "eat" | "break" | "see" | "saw"
+     Vpsg -> "sees" | "saw" | "hears" | "heard"
+     Vppl -> "see" | "saw" | "hear" | "heard"
+""")
+
+def app(grammar,sent="we sleep"):
+    """
+    Create a recursive descent parser demo, using a simple grammar and
+    text.
+    """    
+    rd.RecursiveDescentApp(grammar, sent.split()).mainloop()

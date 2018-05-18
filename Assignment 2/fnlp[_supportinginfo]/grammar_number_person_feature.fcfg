@@ -1,0 +1,7 @@
+% start S
+# Grammatical productions.
+
+# Lexical productions.
+Pro[NUM=sg, PER=st] -> "i"
+Det[NUM=sg, PER=?p] -> "a" | "an" | "the"
+Det[NUM=pl, PER=?p] -> "the" 

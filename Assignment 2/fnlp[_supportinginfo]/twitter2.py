@@ -1,0 +1,180 @@
+from nltk.corpus.reader.plaintext import PlaintextCorpusReader
+from nltk.corpus.reader import RegexpTokenizer
+from nltk.tokenize import LineTokenizer
+from nltk.corpus.reader.util import read_line_block
+from nltk import NgramModel, ConditionalFreqDist, ngrams,\
+     chain, ConditionalProbDist, WittenBellProbDist, FreqDist
+import types
+import pylab
+
+pylab.ion()
+
+xtwc=PlaintextCorpusReader("/group/ltg/projects/fnlp/",
+                          r'2.*\.txt',
+                          word_tokenizer=RegexpTokenizer(r'(http|ftp|mailto)://[^\s]+|[\w#@]+|[^\w\s]+'),
+                          sent_tokenizer=LineTokenizer(),
+                          para_block_reader=read_line_block)
+
+def discount(self):
+    return float(self._N)/float(self._N + self._T)
+
+WittenBellProbDist.discount = discount
+
+def _estimator(fdist, bins):
+    """
+    Default estimator function using WB.
+    """
+    # can't be an instance method of NgramModel as they
+    # can't be pickled either.
+    return WittenBellProbDist(fdist,fdist.B()+1)
+
+class LgramModel(NgramModel):
+    """
+    A processing interface for assigning a probability to the next letter.
+    """
+
+    def __init__(self, n, train, pad_left=True, pad_right=True,
+                 estimator=None, *estimator_args, **estimator_kwargs):
+        """
+        Create an ngram language model to capture patterns in n
+        consecutive letters of training text.  An estimator smooths
+        the probabilities derived from the text and may allow
+        generation of ngrams not seen during training.
+
+            >>> from nltk.corpus import brown
+            >>> from nltk.probability import LidstoneProbDist
+            >>> est = lambda fdist, bins: LidstoneProbDist(fdist, 0.2)
+            >>> lm = LgramModel(3, brown.words(categories='news'), estimator=est)
+            >>> lm
+            <NgramModel with 8716 3-grams>
+            >>> lm._backoff
+            <NgramModel with 1407 2-grams>
+            >>> lm.entropy(['The', 'Fulton', 'County', 'Grand', 'Jury', 'said',
+            ... 'Friday', 'an', 'investigation', 'of', "Atlanta's", 'recent',
+            ... 'primary', 'election', 'produced', '``', 'no', 'evidence',
+            ... "''", 'that', 'any', 'irregularities', 'took', 'place', '.'])
+            ... # doctest: +ELLIPSIS
+            5.3629671965966104
+
+        :param n: the order of the language model (ngram size)
+        :type n: int
+        :param train: the training text
+        :type train: list(str)
+        :param pad_left: whether to pad the left of each sentence with an (n-1)-gram of empty strings
+        :type pad_left: bool
+        :param pad_right: whether to pad the right of each sentence with an (n-1)-gram of empty strings
+        :type pad_right: bool
+        :param estimator: a function for generating a probability distribution
+        :type estimator: a function that takes a ConditionalFreqDist and
+            returns a ConditionalProbDist
+        :param estimator_args: Extra arguments for estimator.
+            These arguments are usually used to specify extra
+            properties for the probability distributions of individual
+            conditions, such as the number of bins they contain.
+            Note: For backward-compatibility, if no arguments are specified, the
+            number of bins in the underlying ConditionalFreqDist are passed to
+            the estimator as an argument.
+        :type estimator_args: (any)
+        :param estimator_kwargs: Extra keyword arguments for the estimator
+        :type estimator_kwargs: (any)
+        """
+
+        # protection from cryptic behavior for calling programs
+        # that use the pre-2.0.2 interface
+        assert(isinstance(pad_left, bool))
+        assert(isinstance(pad_right, bool))
+
+        self._n = n
+        self._lpad = ('',) * (n - 1) if pad_left else ()
+        self._rpad = ('',) * (n - 1) if pad_right else ()
+
+        if estimator is None:
+            estimator = _estimator
+
+        cfd = ConditionalFreqDist()
+        self._ngrams = set()
+
+
+        ## If given a list of strings, leave it alone :-)
+        #if (train is not None) and isinstance(train[0], compat.string_types):
+        #    train = [train]
+        # Given backoff, a generator isn't acceptable
+        if isinstance(train,types.GeneratorType):
+          train=list(train)
+
+        for word in train:
+            for ngram in ngrams(chain(self._lpad, word, self._rpad), n):
+                self._ngrams.add(ngram)
+                context = tuple(ngram[:-1])
+                token = ngram[-1]
+                cfd[context].inc(token)
+        #import pdb; pdb.set_trace()
+        if not estimator_args and not estimator_kwargs:
+            self._model = ConditionalProbDist(cfd, estimator, len(cfd))
+        else:
+            self._model = ConditionalProbDist(cfd, estimator, *estimator_args, **estimator_kwargs)
+
+        # recursively construct the lower-order models
+        if n > 1:
+            self._backoff = LgramModel(n-1, train, pad_left, pad_right,
+                                       estimator, *estimator_args, **estimator_kwargs)
+
+try:
+	from nltk import compat
+except:
+	pass
+
+from nltk.probability import _get_kwarg,islice
+
+def plotSorted(self, *args, **kwargs):
+        """
+        Plot samples from the frequency distribution,
+        sorted using a supplied key function.  If an integer
+        parameter is supplied, stop after this many samples have been
+        plotted.  If two integer parameters m, n are supplied, plot a
+        subset of the samples, beginning with m and stopping at n-1.
+        For a cumulative plot, specify cumulative=True.
+        (Requires Matplotlib to be installed.)
+
+        :param title: The title for the graph
+        :type title: str
+        :param key: a function to pass to sort to extract the sort key
+          given an FD and a sample id.
+          Defaults to the value of that sample's entry,
+          lambda fd,s:fd[s]
+        :type key: function
+        :param reverse: True to sort high to low
+        :type reverse: bool
+        """
+        try:
+            import pylab
+        except ImportError:
+            raise ValueError('The plot function requires the matplotlib package (aka pylab). '
+                         'See http://matplotlib.sourceforge.net/')
+
+        if len(args) == 0:
+            args = [len(self)]
+
+        keyFn = _get_kwarg(kwargs, 'key', lambda fd,s:fd[s])
+        reverse = _get_kwarg(kwargs, 'reverse', False)
+
+        samples = list(islice(self, *args))
+        samples.sort(key=lambda x:keyFn(self,x),reverse=reverse)
+
+        freqs = [self[sample] for sample in samples]
+        ylabel = "Counts"
+        # percents = [f * 100 for f in freqs]  only in ProbDist?
+
+        pylab.grid(True, color="silver")
+        if not "linewidth" in kwargs:
+            kwargs["linewidth"] = 2
+        if "title" in kwargs:
+            pylab.title(kwargs["title"])
+            del kwargs["title"]
+        pylab.plot(freqs, **kwargs)
+        pylab.xticks(range(len(samples)), [compat.text_type(s) for s in samples], rotation=90)
+        pylab.xlabel("Samples")
+        pylab.ylabel(ylabel)
+        pylab.show()
+
+FreqDist.plotSorted=plotSorted
